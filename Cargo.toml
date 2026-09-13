@@ -1,0 +1,13 @@
+[package]
+name = "httpz"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre = "0.6.5"
+http-body-util = { version = "0.1.5", features = ["full"] }
+hyper = { version = "1.11.1", features = ["full"] }
+hyper-util = { version = "0.1.20", features = ["full"] }
+tokio = { version = "1.53.1", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
