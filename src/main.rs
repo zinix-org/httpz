@@ -8,28 +8,17 @@ use hyper::{
 };
 use hyper_util::rt::TokioIo;
 use std::{
-    env::current_dir,
+    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::OnceLock,
 };
 use tokio::net::TcpListener;
 use tracing::{Level, debug, info, warn};
 
-static CWD: OnceLock<PathBuf> = OnceLock::new();
-
-fn get_cwd() -> &'static PathBuf {
-    CWD.get_or_init(|| match current_dir() {
-        Ok(p) => p,
-        _ => unimplemented!(),
-    })
-}
-
 async fn handle_request(req: Request<Incoming>) -> Result<Response<Full<Bytes>>> {
-    debug!("{}", req.uri());
+    debug!("GET {} -> .{}", req.uri(), req.uri());
 
     let uri = req.uri();
-    let cwd = get_cwd();
 
     // Get the file path, if it doesn't exist return 404.
     let path = match Path::new(&format!(".{}", uri.path())).canonicalize() {
@@ -45,9 +34,19 @@ async fn handle_request(req: Request<Incoming>) -> Result<Response<Full<Bytes>>>
         return construct_dir_view(&path, &uri);
     }
 
+    if path.is_file() {
+        return construct_file_view(&path, &uri);
+    }
+
     Ok(Response::builder()
         .status(StatusCode::NOT_IMPLEMENTED)
         .body(Full::new(Bytes::from("501 Not Implemented")))?)
+}
+
+fn construct_file_view(path: &PathBuf, uri: &Uri) -> Result<Response<Full<Bytes>>> {
+    let body = fs::read(path)?;
+
+    Ok(Response::new(Full::new(Bytes::from(body))))
 }
 
 fn construct_dir_view(path: &PathBuf, uri: &Uri) -> Result<Response<Full<Bytes>>> {
@@ -83,19 +82,24 @@ fn construct_dir_view(path: &PathBuf, uri: &Uri) -> Result<Response<Full<Bytes>>
 
     for e in entries {
         body.push_str(&format!(
-            "<a href=\"{}/{}/\"><p>{}{}</p></a>",
+            "<a href=\"{}/{}{}\"><p>{}{}</p></a>",
             uri.path().trim_end_matches("/"),
             PathBuf::from(e.clone()).strip_prefix(path)?.display(),
+            if PathBuf::from(e.clone()).is_dir() {
+                "/"
+            } else {
+                ""
+            },
             PathBuf::from(e.clone()).strip_prefix(path)?.display(),
-            if PathBuf::from(e).is_dir() { "/" } else { "" }
+            if PathBuf::from(e.clone()).is_dir() {
+                "/"
+            } else {
+                ""
+            }
         ));
     }
 
     Ok(Response::new(Full::new(Bytes::from(body))))
-
-    // Ok(Response::builder()
-    //     .status(StatusCode::NOT_IMPLEMENTED)
-    //     .body(Full::new(Bytes::from("501 Not Implemented")))?)
 }
 
 #[tokio::main]
